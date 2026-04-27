@@ -36,8 +36,7 @@ public:
   static char ID;
 
   DumpInterferenceGraphLegacy() : MachineFunctionPass(ID) {
-    initializeDumpInterferenceGraphLegacyPass(
-        *PassRegistry::getPassRegistry());
+    initializeDumpInterferenceGraphLegacyPass(*PassRegistry::getPassRegistry());
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -95,9 +94,17 @@ bool DumpInterferenceGraphLegacy::runOnMachineFunction(MachineFunction &MF) {
     for (unsigned a = 0; a < N; ++a) {
       Register VRegA = Register::index2VirtReg(VRegIndices[a]);
       LiveInterval &LI_A = LIS.getInterval(VRegA);
+
+      if (LI_A.empty())
+        continue;
+
       for (unsigned b = a + 1; b < N; ++b) {
         Register VRegB = Register::index2VirtReg(VRegIndices[b]);
         LiveInterval &LI_B = LIS.getInterval(VRegB);
+
+        if (LI_B.empty())
+          continue;
+
         if (LI_A.overlaps(LI_B))
           Edges.emplace_back(a + 1, b + 1); // 1-based for DIMACS
       }
@@ -114,9 +121,15 @@ bool DumpInterferenceGraphLegacy::runOnMachineFunction(MachineFunction &MF) {
     }
 
     // Write DIMACS file.
-    std::string Filename = ("./interference_graphs/" + MF.getName() + "_" +
-                            TRI->getRegClassName(RC) + ".dimacs")
-                               .str();
+    constexpr size_t MaxFilenameLength = 100;
+
+    std::string FilenamePrefix = MF.getName().str();
+    if (FilenamePrefix.size() > MaxFilenameLength)
+      FilenamePrefix.resize(MaxFilenameLength);
+
+    std::string Filename = ("./interference_graphs/" + FilenamePrefix + "_" +
+                            TRI->getRegClassName(RC) + ".dimacs");
+
     std::error_code EC;
     raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
     if (EC) {
